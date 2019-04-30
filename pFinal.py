@@ -12,6 +12,8 @@ from pathlib import Path
 from nltk.tokenize import WhitespaceTokenizer
 import nltk.data
 from nltk.tokenize import sent_tokenize
+from nltk.parse.stanford import StanfordDependencyParser
+from string import digits
 
 
 
@@ -22,11 +24,24 @@ with open('./positive-words.txt', 'r') as file:
 
 with open('./negative-words.txt', 'r') as file:
     texto_negativo = file.read()
+    
+    
+    
+path_to_jar = './stanford-parser-full-2018-10-17/stanford-parser.jar'
+path_to_models_jar = './stanford-parser-full-2018-10-17/stanford-parser-3.9.2-models.jar'
+
+sentence_tokenizer = nltk.data.load("tokenizers/punkt/english.pickle")
+
+
+
+dependency_parser = StanfordDependencyParser(path_to_jar = path_to_jar,
+path_to_models_jar = path_to_models_jar, 
+model_path = 'edu/stanford/nlp/models/lexparser/englishPCFG.ser.gz')
 
 
 pathTrain = "./SFU_Review_Corpus_Raw_partitions/train/"
 pathDev = "./SFU_Review_Corpus_Raw_partitions/dev/"
-#pathDev2 = "./SFU_Review_Corpus_Raw_partitions/dev2/"
+pathDev2 = "./SFU_Review_Corpus_Raw_partitions/dev2/"
 pathTest = "./SFU_Review_Corpus_Raw_partitions/test/"
 corpus = ["BOOKS","CARS","COMPUTERS","COOKWARE","HOTELS","MOVIES","MUSIC","PHONES"]
 corpus2 = ["BOOKS"]
@@ -43,7 +58,7 @@ peso_palabras_negativas = [1] * 4785
 
 #Variables para conrolar el peso de adjetivos y verbos
 peso_adjetivo = 3
-peso_verbos = 1
+peso_verbos = 1.5
 patternAdjetivo= re.compile("^JJ")
 patternVerbo = re.compile("VB")
 
@@ -67,6 +82,7 @@ numTextosNegativos = 0
 whitespaceTokenizer = WhitespaceTokenizer()
 
 #Metodo para realizar la actuación de pesos y encapsular codigo
+
 def actualizarPesos(tokens_texto, palabras_lexicon, vector_pesos):
     valoresCompartidos = set(tokens_texto) & set(palabras_lexicon)
     for v in valoresCompartidos:
@@ -101,88 +117,163 @@ sentence_tokenizer = nltk.data.load("tokenizers/punkt/english.pickle")
 listaResultados = []
 
 #Ejecucion desarrollo
+
 for c in corpus:
-    pathDevCorpus = pathDev +"/"+c
-    for fichero in os.listdir(pathDevCorpus):
-        with open(pathDevCorpus +"/"+fichero,"r") as file:
-            contents = Path(pathDevCorpus +"/"+fichero).read_text()
-        oracionesTexto = sentence_tokenizer.tokenize(contents)  #Obtenemos las diferentes oraciones que componen el texto
-        
-        pesoTotalPositivo = 0
-        pesoTotalNegativo = 0
-        
-        for oracion in oracionesTexto:
-            tokens_texto = whitespaceTokenizer.tokenize(contents)       #Tokenizar la frase
-            [x.lower() for x in tokens_texto]                           #Transformar todas las palabras a minúscula para poder compararlas con el lexicón            
-            tags = tagger.tag(tokens_texto)                             #Obtenemos las duplas palabra-etiqueta
+        pathDevCorpus = pathDev +"/"+c
+        for fichero in os.listdir(pathDevCorpus):
+            with open(pathDevCorpus +"/"+fichero,"r") as file:
+                contents = Path(pathDevCorpus +"/"+fichero).read_text()
+                remove_digits = str.maketrans('', '', digits)
+                contents = contents.translate(remove_digits)
+                print(pathDevCorpus +"/"+fichero)
+            oracionesTexto = sentence_tokenizer.tokenize(contents)  #Obtenemos las diferentes oraciones que componen el texto
+            pesoTotalPositivo = 0
+            pesoTotalNegativo = 0
             
-            for tag in tags:
-                if tag[0] in palabras_positivas:
-                    print("Palabra positiva", tag[0])                 
-                    pesoBase = peso_palabras_positivas[palabras_positivas.index(tag[0])]
-                    print("Peso palabra",pesoBase)
-                    #Evaluar si la palabra es un adjetivo o adverbio para multiplicar por el modificador
-                    if patternAdjetivo.match(tag[1]):
-                        pesoBase = pesoBase * peso_adjetivo
-                        print("Adjetivo, nuevo pesoBase", pesoBase)
-                    elif patternVerbo.match(tag[1]):
-                        pesoBase = pesoBase * peso_verbos
-                        print("Adverbio, nuevo pesoBase", pesoBase)
-                    #Evaluar si la palabra está en la primera o última frase del texto para multiplicar por el modificador
-                    if oracion == oracionesTexto[0]:
-                        pesoBase = pesoBase * peso_oracion_inicial
-                        print("Primera oracion, nuevo pesoBase", pesoBase)                        
-                    elif oracion == oracionesTexto[-1]:
-                        pesoBase = pesoBase * peso_oracion_final
-                        print("Ultima oracion, nuevo pesoBase", pesoBase)                        
-                    #Sumar el peso de la palabra al peso total positivo del documento
-                    pesoTotalPositivo += pesoBase
-                    print("Peso base", pesoBase)
-                    print("Peso total positivo actual", pesoTotalPositivo)
-                                            
-                     
-                elif tag[0] in palabras_negativas:
-                    print("Palabra negativa", tag[0])                                     
-                    pesoBase = peso_palabras_negativas[palabras_negativas.index(tag[0])]
-                    print("Peso palabra",pesoBase)
-                    #Evaluar si la palabra es un adjetivo o adverbio para multiplicar por el modificador                    
-                    if patternAdjetivo.match(tag[1]):
-                        pesoBase = pesoBase * peso_adjetivo
-                        print("Adjetivo, nuevo pesoBase", pesoBase)                        
-                    elif patternVerbo.match(tag[1]):
-                        pesoBase = pesoBase * peso_verbos
-                        print("Adverbio, nuevo pesoBase", pesoBase)
-                    #Evaluar si la palabra está en la primera o última frase del texto para multiplicar por el modificador                        
-                    if oracion == oracionesTexto[0]:
-                        pesoBase = pesoBase * peso_oracion_inicial
-                        print("Primera oracion, nuevo pesoBase", pesoBase)     
-                    elif oracion == oracionesTexto[-1]:
-                        pesoBase = pesoBase * peso_oracion_final    
-                        print("Ultima oracion, nuevo pesoBase", pesoBase)                        
-
-                    #Sumar el peso de la palabra al peso total negativo del documento                        
-                    pesoTotalNegativo+= pesoBase*2                   
-                    print("Peso base", pesoBase)
-                    print("Peso total negativo actual", pesoTotalNegativo)
-                                                                
+            for oracion in oracionesTexto:
+                tokens_texto = whitespaceTokenizer.tokenize(contents)       #Tokenizar la frase
+                [x.lower() for x in tokens_texto]                           #Transformar todas las palabras a minúscula para poder compararlas con el lexicón            
+                tags = tagger.tag(tokens_texto)                             #Obtenemos las duplas palabra-etiqueta
+                
+                iterator = dependency_parser.raw_parse(oracion)
+                for dep in iterator:
+                    lista = list(dep.triples())
+                    for tupla in lista:
+                        if(tupla[1] == "amod"): #Tratamiento de adjetivos
+                            if(tupla[2][0] in palabras_positivas):
+                                 pesoBase = peso_palabras_positivas[palabras_positivas.index(tupla[2][0])]
+                                 pesoBase += peso_adjetivo
+                                 if oracion == oracionesTexto[0]:
+                                     pesoBase = pesoBase + peso_oracion_inicial
+                                 elif oracion == oracionesTexto[-1]:
+                                     pesoBase = pesoBase + peso_oracion_final
+                                 for tuplaNeg in lista:
+                                     if(tuplaNeg[1] == "neg" and tuplaNeg[0][0] == tupla[2][0]):
+                                         pesoBase = 0 - pesoBase/2
+                                         break
+                                 print("P")
+                                 print(tupla, pesoBase)        
+                                 pesoTotalPositivo += pesoBase
                                  
-                    
-        #Comprar los pesos y añadir a resultado final  
-        print("--------------")
-        print("Peso positivo", pesoTotalPositivo)
-        print("Peso negativo", pesoTotalNegativo)                              
-        if(pesoTotalPositivo > pesoTotalNegativo):
-            resultado = fichero + "      " +c+"      "+"positive"
-            listaResultados.append(resultado)
-            print(resultado)
-        else:
-            resultado = fichero + "      " +c+"      "+"negative"
-            listaResultados.append(resultado)
-            print(resultado)
-        print("--------------")        
+                            elif(tupla[2][0] in palabras_negativas):
+                                 pesoBase = peso_palabras_negativas[palabras_negativas.index(tupla[2][0])]
+                                 pesoBase += peso_adjetivo
+                                 if oracion == oracionesTexto[0]:
+                                     pesoBase = pesoBase + peso_oracion_inicial
+                                 elif oracion == oracionesTexto[-1]:
+                                     pesoBase = pesoBase + peso_oracion_final
+                                 for tuplaNeg in lista:
+                                     if(tuplaNeg[1] == "neg" and tuplaNeg[0][0] == tupla[2][0] ):
+                                         pesoBase = 0 - pesoBase/2
+                                         break
+                                 print("N")
+                                 print(tupla, pesoBase)
+                                 pesoTotalNegativo+= pesoBase
+    
+    
+    
+    
+                        if(tupla[1] == "advmod"): #Tratamiento de adverbios 
+                            if(tupla[2][0] in palabras_positivas):
+                                 pesoBase = peso_palabras_positivas[palabras_positivas.index(tupla[2][0])]                                 
+                                 if oracion == oracionesTexto[0]:
+                                     pesoBase = pesoBase + peso_oracion_inicial
+                                 elif oracion == oracionesTexto[-1]:
+                                     pesoBase = pesoBase + peso_oracion_final
+                                 for tuplaNeg in lista:
+                                     if(tuplaNeg[1] == "neg" and tuplaNeg[0][0] == tupla[0][0]):
+                                         pesoBase = 0 - pesoBase/2
+                                         break
+                                 print("P")
+                                 print(tupla, pesoBase)        
+                                 pesoTotalPositivo += pesoBase
+                                 
+                            elif(tupla[2][0] in palabras_negativas):
+                                 pesoBase = peso_palabras_negativas[palabras_negativas.index(tupla[2][0])]
+                                 if oracion == oracionesTexto[0]:
+                                     pesoBase = pesoBase + peso_oracion_inicial
+                                 elif oracion == oracionesTexto[-1]:
+                                     pesoBase = pesoBase + peso_oracion_final
+                                 for tuplaNeg in lista:
+                                     if(tuplaNeg[1] == "neg"  and tuplaNeg[0][0] == tupla[0][0]):
+                                         pesoBase = 0 - pesoBase/2
+                                         break
+                                 print("N")
+                                 print(tupla, pesoBase)
+                                 pesoTotalNegativo+= pesoBase 
+                                 
+                                 
+                        if(tupla[1] == "xcomp"): 
+                            if(tupla[2][0] in palabras_positivas):
+                                 pesoBase = peso_palabras_positivas[palabras_positivas.index(tupla[2][0])]
+                                 if oracion == oracionesTexto[0]:
+                                     pesoBase = pesoBase + peso_oracion_inicial
+                                 elif oracion == oracionesTexto[-1]:
+                                     pesoBase = pesoBase + peso_oracion_final
+                                 for tuplaNeg in lista:
+                                     if(tuplaNeg[1] == "neg" ):
+                                         pesoBase = 0 - pesoBase/2
+                                         break
+                                 print("P")
+                                 print(tupla, pesoBase)        
+                                 pesoTotalPositivo += pesoBase
+                                 
+                            elif(tupla[2][0] in palabras_negativas):
+                                 pesoBase = peso_palabras_negativas[palabras_negativas.index(tupla[2][0])]
+                                 if oracion == oracionesTexto[0]:
+                                     pesoBase = pesoBase + peso_oracion_inicial
+                                 elif oracion == oracionesTexto[-1]:
+                                     pesoBase = pesoBase + peso_oracion_final
+                                 for tuplaNeg in lista:
+                                     if(tuplaNeg[1] == "neg"  ):
+                                         pesoBase = 0 - pesoBase/2
+                                         break
+                                 print("N")
+                                 print(tupla, pesoBase)
+                                 pesoTotalNegativo+= pesoBase                          
+                        
+                                                                                                 
+                                 
+                        if(tupla[1] == "copula"): 
+                            if(tupla[0][0] in palabras_positivas):
+                                 pesoBase = peso_palabras_positivas[palabras_positivas.index(tupla[0][0])]
+                                 if oracion == oracionesTexto[0]:
+                                     pesoBase = pesoBase + peso_oracion_inicial
+                                 elif oracion == oracionesTexto[-1]:
+                                     pesoBase = pesoBase + peso_oracion_final
+                                 for tuplaNeg in lista:
+                                     if(tuplaNeg[1] == "neg" ):
+                                         pesoBase = 0 - pesoBase/2
+                                         break
+                                 print("P")
+                                 print(tupla, pesoBase)        
+                                 pesoTotalPositivo += pesoBase
+                                 
+                            elif(tupla[0][0] in palabras_negativas):
+                                 pesoBase = peso_palabras_negativas[palabras_negativas.index(tupla[0][0])]
+                                 if oracion == oracionesTexto[0]:
+                                     pesoBase = pesoBase + peso_oracion_inicial
+                                 elif oracion == oracionesTexto[-1]:
+                                     pesoBase = pesoBase + peso_oracion_final
+                                 for tuplaNeg in lista:
+                                     if(tuplaNeg[1] == "neg"  ):
+                                         pesoBase = 0 - pesoBase/2
+                                         break
+                                 print("N")
+                                 print(tupla, pesoBase)
+                                 pesoTotalNegativo+= pesoBase       
+                                 
+            
+            pesoTotalNegativo = pesoTotalNegativo * 2
+            if(pesoTotalPositivo > pesoTotalNegativo):
+                resultado = fichero + "\t" +c+"\t"+"positive"
+                listaResultados.append(resultado)
+            else:
+                resultado = fichero + "\t" +c+"\t"+"negative"
+                listaResultados.append(resultado)
 
 
-print(listaResultados)
+#print(listaResultados)
 file = open('resultados.txt', 'w')
 for fila in listaResultados:
     
