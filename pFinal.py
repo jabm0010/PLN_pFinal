@@ -45,6 +45,7 @@ pathDev = "./SFU_Review_Corpus_Raw_partitions/dev/"
 pathDev2 = "./SFU_Review_Corpus_Raw_partitions/dev2/"
 pathDevPickle = "./SFU_Review_Corpus_Raw_partitions/devPickle/"
 pathTest = "./SFU_Review_Corpus_Raw_partitions/test/"
+pathTestPickle = "./SFU_Review_Corpus_Raw_partitions/testPickle/"
 corpus = ["BOOKS","CARS","COMPUTERS","COOKWARE","HOTELS","MOVIES","MUSIC","PHONES"]
 corpus2 = ["BOOKS"]
 
@@ -117,7 +118,7 @@ sentence_tokenizer = nltk.data.load("tokenizers/punkt/english.pickle")
 
 
 
-listaResultados = []
+
 
 #Preparación del sistema
 
@@ -155,19 +156,19 @@ def serializarDatosTest():
                     lista = list(dep.triples())
                     oracionesDependencias.append(lista)
             print(pathTestCorpus+"/"+fichero)
-            pickle.dump(oracionesDependencias, open(pathDevPickle+c+"/"+fichero,'wb'))   
-            
+            pickle.dump(oracionesDependencias, open(pathTestPickle+c+"/"+fichero,'wb'))   
+  
+#Realizar llamadas a SerializarDatosDev y SerializarDatosTest en caso de que no existan los archivos serializados correspondientes
 #serializarDatosDev()
 #serializarDatosTest()
 
-#cargaDatos = pickle.load(open(pathDevPickle+corpus[0]+"/no9.txt",'rb'))
 
 
             
 
 
 
-
+#Métodos de evaluación para el desarrollo
 def evaluar_amod(tupla,oracion,oracionesTexto):
     pesoBase = 0
     if(tupla[2][0] in palabras_positivas):
@@ -273,12 +274,10 @@ def evaluar_xcomp(tupla,oracion,oracionesTexto):
         print(tupla, pesoBase)
     return pesoBase
 
-#Ejecucion desarrollo
-    
 
 
-#cargaDatos = pickle.load(open(pathDevPickle+corpus[0]+"/no9.txt",'rb'))
-
+listaResultados = []
+#Desarrollo
 def cargarDatosDev():
     for c in corpus:
         pathDevCorpus = pathDevPickle + "/" +c
@@ -306,7 +305,35 @@ def cargarDatosDev():
                 resultado = fichero + "\t" +c+"\t"+"negative"
                 listaResultados.append(resultado)  
                 
-#cargarDatosDev()
+def cargarDatosTest():
+    for c in corpus:
+        pathTestCorpus = pathTestPickle + "/" +c
+        for fichero in os.listdir(pathTestCorpus):   
+            print(pathTestCorpus + "/"+fichero)
+            oracionesTexto = pickle.load(open(pathTestCorpus + "/"+fichero,'rb'))
+            pesoTotal = -50
+            for oracion in oracionesTexto:
+                for tupla in oracion:
+                    if(tupla[1] == "amod"):
+                        pesoTotal += evaluar_amod(tupla,oracion,oracionesTexto) #Evaluar adjetivos modificadores
+        
+                    if(tupla[1] == "advmod"): 
+                        pesoTotal +=evaluar_advmod(tupla,oracion,oracionesTexto) #Tratamiento de adverbios 
+                                 
+                                 
+                    if(tupla[1] == "xcomp"): 
+                        pesoTotal +=evaluar_xcomp(tupla,oracion,oracionesTexto) #Tratamiento de xcomp
+                        
+                      
+            if(pesoTotal > 0):
+                resultado = fichero + "\t" +c+"\t"+"positive"
+                listaResultados.append(resultado)
+            else:
+                resultado = fichero + "\t" +c+"\t"+"negative"
+                listaResultados.append(resultado)  
+                
+cargarDatosDev()
+#cargarDatosTest()
 
 """
 for c in corpus2:
